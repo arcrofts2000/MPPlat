@@ -37,3 +37,13 @@ void UMPPGameInstanceSubsystem::PrintString(const FString& InString)
 	if (GEngine)
 		GEngine->AddOnScreenDebugMessage(-1, 15.f, FColor::Red, InString);
 }
+
+void UMPPGameInstanceSubsystem::CreateServer(FString ServerName)
+{
+	PrintString("CreateServer");
+}
+
+void UMPPGameInstanceSubsystem::FindServer(FString ServerName)
+{
+	PrintString("FindServer");
+}

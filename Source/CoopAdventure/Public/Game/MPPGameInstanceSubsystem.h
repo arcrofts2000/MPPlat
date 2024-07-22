@@ -25,4 +25,10 @@ public:
 	void PrintString(const FString& InString);
 
 	IOnlineSessionPtr SessionInterface;
+
+	UFUNCTION(BlueprintCallable, Category = "Online")
+	void CreateServer(FString ServerName);
+
+	UFUNCTION(BlueprintCallable, Category = "Online")
+	void FindServer(FString ServerName);
 };
