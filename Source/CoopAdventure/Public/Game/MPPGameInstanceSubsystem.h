@@ -4,7 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "Interfaces/OnlineSessionInterface.h"
 #include "MPPGameInstanceSubsystem.generated.h"
+
 
 /**
  * 
@@ -21,4 +23,6 @@ public:
 	void Deinitialize() override;
 
 	void PrintString(const FString& InString);
+
+	IOnlineSessionPtr SessionInterface;
 };
