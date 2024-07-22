@@ -31,4 +31,6 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Online")
 	void FindServer(FString ServerName);
+
+	void OnCreateSessionComplete(FName SessionName, bool bWasSuccessful);
 };
