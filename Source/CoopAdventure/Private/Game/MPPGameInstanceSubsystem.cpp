@@ -3,11 +3,14 @@
 
 #include "Game/MPPGameInstanceSubsystem.h"
 #include "OnlineSubsystem.h"
-#include "OnlineSessionSettings.h"
+#include "Online/OnlineSessionNames.h"
 
 UMPPGameInstanceSubsystem::UMPPGameInstanceSubsystem()
 {
 	//PrintString("MSS Constructor");
+	bCreateServerAfterDestroy = false;
+	DestroyedServerName = "";
+	ServerNameToFind = "";
 }
 
 void UMPPGameInstanceSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -23,7 +26,8 @@ void UMPPGameInstanceSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		if (SessionInterface.IsValid())
 		{
 			SessionInterface->OnCreateSessionCompleteDelegates.AddUObject(this, &UMPPGameInstanceSubsystem::OnCreateSessionComplete);
-			
+			SessionInterface->OnDestroySessionCompleteDelegates.AddUObject(this, &UMPPGameInstanceSubsystem::OnDestroySessionComplete);
+			SessionInterface->OnFindSessionsCompleteDelegates.AddUObject(this, &UMPPGameInstanceSubsystem::OnFindSessionsComplete);
 		}
 	}
 }
@@ -54,6 +58,8 @@ void UMPPGameInstanceSubsystem::CreateServer(FString ServerName)
 	if (FNamedOnlineSession* ExistingSession = SessionInterface->GetNamedSession(SessionName))
 	{
 		PrintString(FString::Printf(TEXT("Session with name %s already exists, destroying it."), *SessionName.ToString()));
+		bCreateServerAfterDestroy = true;
+		DestroyedServerName = ServerName;
 		SessionInterface->DestroySession(SessionName);
 		return;
 	}
@@ -72,6 +78,7 @@ void UMPPGameInstanceSubsystem::CreateServer(FString ServerName)
 		bIsLan = true;
 
 	SessionSettings.bIsLANMatch = bIsLan;
+	SessionSettings.Set(FName("SERVER_NAME"), ServerName, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 
 	SessionInterface->CreateSession(0, SessionName, SessionSettings);
 }
@@ -79,6 +86,25 @@ void UMPPGameInstanceSubsystem::CreateServer(FString ServerName)
 void UMPPGameInstanceSubsystem::FindServer(FString ServerName)
 {
 	PrintString("FindServer");
+
+	if (ServerName.IsEmpty())
+	{
+		PrintString("Server name cannot be empty!");
+		return;
+	}
+
+	SessionSearch = MakeShareable(new FOnlineSessionSearch());
+	bool bIsLAN = false;
+	if (IOnlineSubsystem::Get()->GetSubsystemName() == "NULL")
+		bIsLAN = true;
+
+	SessionSearch->bIsLanQuery = bIsLAN;
+	SessionSearch->MaxSearchResults = 9999;
+	SessionSearch->QuerySettings.Set(SEARCH_PRESENCE, true, EOnlineComparisonOp::Equals);
+
+	ServerNameToFind = ServerName;
+
+	SessionInterface->FindSessions(0, SessionSearch.ToSharedRef());
 }
 
 void UMPPGameInstanceSubsystem::OnCreateSessionComplete(FName SessionName, bool bWasSuccessful)
@@ -88,5 +114,45 @@ void UMPPGameInstanceSubsystem::OnCreateSessionComplete(FName SessionName, bool 
 	if (bWasSuccessful)
 	{
 		GetWorld()->ServerTravel("/Game/ThirdPerson/Maps/ThirdPersonMap?listen");
+	}
+}
+
+void UMPPGameInstanceSubsystem::OnDestroySessionComplete(FName SessionName, bool bWasSuccessful)
+{
+	PrintString(FString::Printf(TEXT("OnDestroySessionComplete: %d"), bWasSuccessful));
+
+	if (bCreateServerAfterDestroy)
+	{
+		bCreateServerAfterDestroy = false;
+		CreateServer(DestroyedServerName);
+	}
+}
+
+void UMPPGameInstanceSubsystem::OnFindSessionsComplete(bool bWasSuccessful)
+{
+	if (!bWasSuccessful)
+		return;
+
+	if (ServerNameToFind.IsEmpty())
+		return;
+
+	TArray<FOnlineSessionSearchResult> Results = SessionSearch->SearchResults;
+	if (Results.Num() > 0)
+	{
+		PrintString(FString::Printf(TEXT("%d Sessions found."), Results.Num()));
+		for (FOnlineSessionSearchResult Result : Results)
+		{
+			if (Result.IsValid())
+			{
+				FString ServerName = "No-Name";
+				Result.Session.SessionSettings.Get(FName("SERVER_NAME"), ServerName);
+
+				PrintString(FString::Printf(TEXT("ServerName: %s"), *ServerName));
+			}
+		}
+	}
+	else
+	{
+		PrintString("Zero sessions found.");
 	}
 }

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Interfaces/OnlineSessionInterface.h"
+#include "OnlineSessionSettings.h"
 #include "MPPGameInstanceSubsystem.generated.h"
 
 
@@ -33,4 +34,12 @@ public:
 	void FindServer(FString ServerName);
 
 	void OnCreateSessionComplete(FName SessionName, bool bWasSuccessful);
+	void OnDestroySessionComplete(FName SessionName, bool bWasSuccessful);
+	void OnFindSessionsComplete(bool bWasSuccessful);
+
+	bool bCreateServerAfterDestroy;
+	FString DestroyedServerName;
+	FString ServerNameToFind;
+
+	TSharedPtr<FOnlineSessionSearch> SessionSearch;
 };
