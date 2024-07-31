@@ -11,6 +11,7 @@ UMPPGameInstanceSubsystem::UMPPGameInstanceSubsystem()
 	bCreateServerAfterDestroy = false;
 	DestroyedServerName = "";
 	ServerNameToFind = "";
+	MySessionName = FName("Co-op Adventure Session Name");
 }
 
 void UMPPGameInstanceSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -28,6 +29,7 @@ void UMPPGameInstanceSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			SessionInterface->OnCreateSessionCompleteDelegates.AddUObject(this, &UMPPGameInstanceSubsystem::OnCreateSessionComplete);
 			SessionInterface->OnDestroySessionCompleteDelegates.AddUObject(this, &UMPPGameInstanceSubsystem::OnDestroySessionComplete);
 			SessionInterface->OnFindSessionsCompleteDelegates.AddUObject(this, &UMPPGameInstanceSubsystem::OnFindSessionsComplete);
+			SessionInterface->OnJoinSessionCompleteDelegates.AddUObject(this, &UMPPGameInstanceSubsystem::OnJoinSessionComplete);
 		}
 	}
 }
@@ -53,14 +55,12 @@ void UMPPGameInstanceSubsystem::CreateServer(FString ServerName)
 		return;
 	}
 
-	FName SessionName = FName("Co-op Adventure Session Name");
-
-	if (FNamedOnlineSession* ExistingSession = SessionInterface->GetNamedSession(SessionName))
+	if (FNamedOnlineSession* ExistingSession = SessionInterface->GetNamedSession(MySessionName))
 	{
-		PrintString(FString::Printf(TEXT("Session with name %s already exists, destroying it."), *SessionName.ToString()));
+		PrintString(FString::Printf(TEXT("Session with name %s already exists, destroying it."), *MySessionName.ToString()));
 		bCreateServerAfterDestroy = true;
 		DestroyedServerName = ServerName;
-		SessionInterface->DestroySession(SessionName);
+		SessionInterface->DestroySession(MySessionName);
 		return;
 	}
 	
@@ -80,7 +80,7 @@ void UMPPGameInstanceSubsystem::CreateServer(FString ServerName)
 	SessionSettings.bIsLANMatch = bIsLan;
 	SessionSettings.Set(FName("SERVER_NAME"), ServerName, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 
-	SessionInterface->CreateSession(0, SessionName, SessionSettings);
+	SessionInterface->CreateSession(0, MySessionName, SessionSettings);
 }
 
 void UMPPGameInstanceSubsystem::FindServer(FString ServerName)
@@ -137,6 +137,8 @@ void UMPPGameInstanceSubsystem::OnFindSessionsComplete(bool bWasSuccessful)
 		return;
 
 	TArray<FOnlineSessionSearchResult> Results = SessionSearch->SearchResults;
+	FOnlineSessionSearchResult* CorrectResult = 0;
+
 	if (Results.Num() > 0)
 	{
 		PrintString(FString::Printf(TEXT("%d Sessions found."), Results.Num()));
@@ -148,11 +150,47 @@ void UMPPGameInstanceSubsystem::OnFindSessionsComplete(bool bWasSuccessful)
 				Result.Session.SessionSettings.Get(FName("SERVER_NAME"), ServerName);
 
 				PrintString(FString::Printf(TEXT("ServerName: %s"), *ServerName));
+
+				if (ServerName.Equals(ServerNameToFind))
+				{
+					CorrectResult = &Result;
+					PrintString(FString::Printf(TEXT("Found Server with name: %s"), *ServerName));
+					break;
+				}
 			}
+		}
+		if (CorrectResult)
+		{
+			SessionInterface->JoinSession(0, MySessionName, *CorrectResult);
+		}
+		else
+		{
+			PrintString(FString::Printf(TEXT("Couldn't find server: %s"), *ServerNameToFind));
+			ServerNameToFind = 0;
 		}
 	}
 	else
 	{
 		PrintString("Zero sessions found.");
 	}
+}
+
+void UMPPGameInstanceSubsystem::OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result)
+{
+	if (Result == EOnJoinSessionCompleteResult::Success)
+	{
+		PrintString(FString::Printf(TEXT("Successfully joined session: %s"), *SessionName.ToString()));
+
+		FString Address = "";
+		if (bool bSuccess = SessionInterface->GetResolvedConnectString(MySessionName, Address))
+		{
+			PrintString(FString::Printf(TEXT("Address: %s"), *Address));
+			if (APlayerController* PC = GetGameInstance()->GetFirstLocalPlayerController())
+				PC->ClientTravel(Address, ETravelType::TRAVEL_Absolute);
+		}
+		else
+			PrintString("GetResolvedConnectString returned false!");
+	}
+	else
+		PrintString("OnJoinSessionComplete failed.");
 }
